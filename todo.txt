@@ -1,0 +1,20 @@
+
+
+
+multi-lane roads
+changing lanes
+
+curbside-parking
+
+
+zoom and pan
+
+
+intersections
+    stops, roundabouts
+
+interchanges
+
+
+
+better display of road transitions, curved junctions
