@@ -61,16 +61,24 @@ const acceleration = 8;     // m per s per s
 const braking = 60;         // m per s per s
 
 
-function render() {
+var mapOffsetX = 0;
+var mapOffsetY = 0;
+var zoom = 1;
+const maxZoom = 2;
+const minZoom = 0.4;
+const zoomIncrement = 0.04;
+
+function render(offsetX, offsetY) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (var r of roads) {
         ctx.save();
         ctx.fillStyle = "grey";
-        ctx.translate(r.posX, r.posY);
+        ctx.scale(zoom, zoom);
+        ctx.translate(r.posX + offsetX, r.posY + offsetY);
         ctx.rotate(-r.angle * Math.PI / 180);
         ctx.fillRect(0, roadRenderOffset, r.len, roadRenderWidth);
         for (var c of r.cars) {
-            ctx.fillStyle = "red";
+            ctx.fillStyle = "cyan";
             ctx.fillRect(c.pos - c.len, carRenderOffset, c.len, carRenderWidth);
         }
         ctx.restore();
@@ -83,7 +91,7 @@ function update(dt) {
         var prevTail = prevCar ? prevCar.pos - prevCar.len + r.len : r.len + defaultTail;
         var prevV = prevCar ? prevCar.v : maxV;
         var shift = 0;   // number of slots to shift up (for num cars that have left this road)
-        // normally only one car will leave road in a single update, but not safe assumption for bigger dt's and velocities
+                         // normally only one car will leave road in a single update, but not safe assumption for bigger dt's and velocities
         for (var i in r.cars) {
             var c = r.cars[i];
             if (shift > 0) {
@@ -120,8 +128,10 @@ function update(dt) {
             prevTail = c.pos - c.len;
             prevV = c.v;
 
+            // when transitioning from one road to the next, do not transfer a car to new road 
+            // until fully on the new road
+            // (so cars travel beyond the end of their own road before transfering)
             if ((r.len + c.len) < c.pos) {
-                // move car to next road 
                 if (r.next) {
                     c.pos = c.pos - r.len;
                     r.next.cars[r.next.cars.length] = c;
@@ -142,12 +152,49 @@ function update(dt) {
 function tick() {
     window.setTimeout(tick, 33.3);
     update(0.0333);
-    render();
+    render(mapOffsetX, mapOffsetY);
 }
+
+document.body.addEventListener('keydown', function(e) {
+    const shiftFactor = 50;
+    var evt = window.event ? window.event : e;
+    switch (evt.keyCode) {
+        case 37:  // left
+            mapOffsetX += shiftFactor;
+           break;
+        case 38: // up
+        mapOffsetY += shiftFactor;
+            break;
+        case 39: // right
+            mapOffsetX -= shiftFactor;
+            break;
+        case 40: // down
+            mapOffsetY -= shiftFactor;
+            break;
+    }
+});
+
+
+document.body.addEventListener('wheel', function(e) {
+    const zoomFactor = 50;
+    var evt = window.event ? window.event : e;
+    if (evt.deltaY) {
+        if (evt.deltaY > 0 ) {
+            zoom += zoomIncrement;
+            if (zoom > maxZoom) {
+                zoom = maxZoom;
+            }
+        } else {
+            zoom -= zoomIncrement;
+            if (zoom < minZoom) {
+                zoom = minZoom;
+            }
+        }
+    }
+});
 
 tick();
 
-// when transitioning from one road to the next, do not transfer a car to new road until fully on the new road
-// (so cars travel beyond the end of their own road before transfering)
+
 
 
