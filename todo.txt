@@ -10,10 +10,15 @@ curbside-parking
 zoom and pan
 
 
+interchanges
+    left for straight, right lane for right and left turns: right ramp and left ramp (x4, for each direction)
+
+// start with all interchanges
 intersections
     stops, roundabouts
 
-interchanges
+
+
 
 
 

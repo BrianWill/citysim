@@ -19,12 +19,21 @@ var road2 = {
     posY: 100,
     len: 200,
     angle: -10,
-    cars: [
-        createCar(180, 2.3, 5, 17.8816),
-        createCar(150, 2.3, 10, 17.8816),
-        createCar(100, 2.3, 0, 17.8816),
-        createCar(50, 2.3, 5, 17.8816),
-        createCar(10, 2.3, 5, 17.8816),
+    lanes: [            // 0th lane is rightmost lane (parking curb)
+        [
+            createCar(180, 2.3, 5, 17.8816),
+            createCar(150, 2.3, 10, 17.8816),
+            createCar(100, 2.3, 0, 17.8816),
+            createCar(50, 2.3, 5, 17.8816),
+            createCar(10, 2.3, 5, 17.8816),
+        ],
+        [
+            createCar(180, 2.3, 5, 17.8816),
+            createCar(150, 2.3, 10, 17.8816),
+            createCar(100, 2.3, 0, 17.8816),
+            createCar(50, 2.3, 5, 17.8816),
+            createCar(10, 2.3, 5, 17.8816),
+        ],
     ],
     next: null,
 };
@@ -34,12 +43,21 @@ var road1 = {
     posY: 300,          // y coord of starting pos (middle of road)
     angle: 30,           // in degrees
     len: 400,           // in meters
-    cars: [
-        createCar(180, 2.3, 5, 17.8816),
-        createCar(150, 2.3, 5, 27.8816),
-        createCar(100, 2.3, 5, 17.8816),
-        createCar(50, 2.3, 5, 17.8816),
-        createCar(10, 2.3, 5, 17.8816),
+    lanes: [
+        [
+            createCar(180, 2.3, 5, 17.8816),
+            createCar(150, 2.3, 5, 27.8816),
+            createCar(100, 2.3, 5, 17.8816),
+            createCar(50, 2.3, 5, 17.8816),
+            createCar(10, 2.3, 5, 17.8816),
+        ],
+        [
+            createCar(180, 2.3, 5, 27.8816),
+            createCar(150, 2.3, 5, 27.8816),
+            createCar(100, 2.3, 5, 17.8816),
+            createCar(50, 2.3, 5, 17.8816),
+            createCar(10, 2.3, 5, 17.8816),
+        ],
     ],
     next: road2,
 };
@@ -56,7 +74,7 @@ const defaultTail = 200;   // when no car is on next road, act as if next car is
 const roadRenderWidth = 10;
 const carRenderWidth = 6;
 const roadRenderOffset = -(roadRenderWidth / 2);
-const carRenderOffset = -(carRenderWidth / 2);
+const carRenderOffset = carRenderWidth + (roadRenderWidth - carRenderWidth) / 2;   // distance from right side of lane to left side of car
 const acceleration = 8;     // m per s per s
 const braking = 60;         // m per s per s
 
@@ -76,10 +94,14 @@ function render(offsetX, offsetY) {
         ctx.scale(zoom, zoom);
         ctx.translate(r.posX + offsetX, r.posY + offsetY);
         ctx.rotate(-r.angle * Math.PI / 180);
-        ctx.fillRect(0, roadRenderOffset, r.len, roadRenderWidth);
-        for (var c of r.cars) {
-            ctx.fillStyle = "cyan";
-            ctx.fillRect(c.pos - c.len, carRenderOffset, c.len, carRenderWidth);
+        ctx.fillRect(0, roadRenderOffset * r.lanes.length, r.len, roadRenderWidth * r.lanes.length);
+        var carRenderY = (r.lanes.length * roadRenderWidth / 2) - carRenderOffset;
+        for (var lane of r.lanes) {
+            for (var c of lane) {
+                ctx.fillStyle = "cyan";
+                ctx.fillRect(c.pos - c.len, carRenderY, c.len, carRenderWidth);
+            }
+            carRenderY -= roadRenderWidth;
         }
         ctx.restore();
     }
@@ -87,59 +109,63 @@ function render(offsetX, offsetY) {
 
 function update(dt) {
     for (var r of roads) {
-        var prevCar = r.next ? r.next.cars[r.next.cars.length - 1] : undefined;
-        var prevTail = prevCar ? prevCar.pos - prevCar.len + r.len : r.len + defaultTail;
-        var prevV = prevCar ? prevCar.v : maxV;
-        var shift = 0;   // number of slots to shift up (for num cars that have left this road)
-                         // normally only one car will leave road in a single update, but not safe assumption for bigger dt's and velocities
-        for (var i in r.cars) {
-            var c = r.cars[i];
-            if (shift > 0) {
-                r.cars[i - shift] = c;
-            }
-            var tailDistance = prevTail - minTrailingDistance(prevV) - c.pos;
-            var actualHeadwayDistance = tailDistance + prevV * headway;
-            var desiredHeadwayDistance = c.v * headway;
-            if (actualHeadwayDistance < desiredHeadwayDistance) {
-                // slow down
-                c.v -= braking * dt;   // we'll assume linear braking
-                if (c.v < 0) {
-                    c.v = 0;
+        for (var laneIdx in r.lanes) {
+            var lane = r.lanes[laneIdx];
+            var nextLane = r.next ? r.next.lanes[laneIdx] : undefined;
+            var prevCar = nextLane ? nextLane[nextLane.length - 1] : undefined;
+            var prevTail = prevCar ? prevCar.pos - prevCar.len + r.len : r.len + defaultTail;
+            var prevV = prevCar ? prevCar.v : maxV;
+            var shift = 0;   // number of slots to shift up (for num cars that have left this road)
+                            // normally only one car will leave road in a single update, but not safe assumption for bigger dt's and velocities
+            for (var i in lane) {
+                var c = lane[i];
+                if (shift > 0) {
+                    lane[i - shift] = c;
                 }
-            } else {
-                if (c.v < c.targetV) {
-                    c.v += acceleration * dt;
-                    if (c.v > c.targetV) {
-                        c.v = c.targetV;
-                    }  
-                } else {
-                    c.v -= braking * dt;
+                var tailDistance = prevTail - minTrailingDistance(prevV) - c.pos;
+                var actualHeadwayDistance = tailDistance + prevV * headway;
+                var desiredHeadwayDistance = c.v * headway;
+                if (actualHeadwayDistance < desiredHeadwayDistance) {
+                    // slow down
+                    c.v -= braking * dt;   // we'll assume linear braking
                     if (c.v < 0) {
                         c.v = 0;
                     }
+                } else {
+                    if (c.v < c.targetV) {
+                        c.v += acceleration * dt;
+                        if (c.v > c.targetV) {
+                            c.v = c.targetV;
+                        }  
+                    } else {
+                        c.v -= braking * dt;
+                        if (c.v < 0) {
+                            c.v = 0;
+                        }
+                    }
+                }
+                c.pos += c.v * dt;
+
+                if (c.pos > prevTail) {
+                    throw ["ACCIDENT: Car rear-ended another car: ", c];
+                }
+
+                prevTail = c.pos - c.len;
+                prevV = c.v;
+
+                // when transitioning from one road to the next, do not transfer a car to new road 
+                // until fully on the new road
+                // (so cars travel beyond the end of their own road before transfering)
+                if ((r.len + c.len) < c.pos) {
+                    if (nextLane) {
+                        c.pos = c.pos - r.len;
+                        nextLane[nextLane.length] = c;
+                    }
+                    shift++;
                 }
             }
-            c.pos += c.v * dt;
-
-            if (c.pos > prevTail) {
-                throw ["ACCIDENT: Car rear-ended another car: ", c];
-            }
-
-            prevTail = c.pos - c.len;
-            prevV = c.v;
-
-            // when transitioning from one road to the next, do not transfer a car to new road 
-            // until fully on the new road
-            // (so cars travel beyond the end of their own road before transfering)
-            if ((r.len + c.len) < c.pos) {
-                if (r.next) {
-                    c.pos = c.pos - r.len;
-                    r.next.cars[r.next.cars.length] = c;
-                }
-                shift++;
-            }
+            lane.length -= shift;
         }
-        r.cars.length -= shift;
     }
     function minTrailingDistance(prevV) {
         const factor = 2;
@@ -150,8 +176,8 @@ function update(dt) {
 
 
 function tick() {
-    window.setTimeout(tick, 33.3);
-    update(0.0333);
+    window.setTimeout(tick, 40);
+    update(0.040);
     render(mapOffsetX, mapOffsetY);
 }
 
